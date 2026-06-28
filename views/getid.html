@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mail Viewer - Email IDs</title>
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --border: #30363d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --accent: #58a6ff;
+      --accent-hover: #79c0ff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    .navbar {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      gap: 24px;
+    }
+
+    .navbar h1 { font-size: 18px; font-weight: 600; }
+
+    .navbar .nav-links { display: flex; gap: 8px; }
+
+    .navbar .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .navbar .nav-links a:hover,
+    .navbar .nav-links a.active {
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .toolbar h2 { font-size: 20px; font-weight: 600; }
+    .toolbar .count { color: var(--text-secondary); font-size: 14px; }
+
+    .table-wrapper {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    thead th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--bg-tertiary); }
+
+    tbody td {
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    tbody td.id {
+      color: var(--accent);
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-weight: 600;
+      width: 80px;
+    }
+
+    tbody td.subject {
+      color: var(--text-primary);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-secondary);
+    }
+
+    .loading .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--bg-tertiary);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-state {
+      text-align: center;
+      padding: 64px 24px;
+      color: var(--text-secondary);
+    }
+
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+    @media (max-width: 768px) {
+      .container { padding: 12px; }
+      .navbar { padding: 0 12px; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <h1>📬 Mail Viewer</h1>
+    <div class="nav-links">
+      <a href="/mail">Inbox</a>
+      <a href="/mail/getid" class="active">IDs</a>
+      <a href="/search">Search</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="toolbar">
+      <h2>Email IDs</h2>
+      <span class="count" id="id-count">Loading...</span>
+    </div>
+
+    <div class="table-wrapper">
+      <div class="loading" id="loading-state">
+        <div class="spinner"></div>
+        <span>Loading IDs...</span>
+      </div>
+
+      <table id="id-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>UID</th>
+            <th>Subject</th>
+          </tr>
+        </thead>
+        <tbody id="id-body"></tbody>
+      </table>
+
+      <div class="empty-state" id="empty-state" style="display:none;">
+        <div class="icon">📭</div>
+        <h3>No emails</h3>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    fetch('/mail/getid', { headers: { Accept: 'application/json' } })
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(data => {
+        document.getElementById('loading-state').style.display = 'none';
+        if (!data || data.length === 0) {
+          document.getElementById('empty-state').style.display = '';
+          document.getElementById('id-count').textContent = '0 emails';
+          return;
+        }
+
+        document.getElementById('id-table').style.display = '';
+        document.getElementById('id-count').textContent = `${data.length} email${data.length !== 1 ? 's' : ''}`;
+
+        const tbody = document.getElementById('id-body');
+        data.forEach(item => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="id">${item.id}</td>
+            <td class="subject">${escapeHtml(item.subject)}</td>
+          `;
+          row.addEventListener('click', () => {
+            window.location.href = `/mail/${item.id}`;
+          });
+          tbody.appendChild(row);
+        });
+      })
+      .catch(err => {
+        document.getElementById('loading-state').innerHTML = `
+          <p>❌ Failed to load: ${escapeHtml(err.message)}</p>
+        `;
+      });
+  </script>
+</body>
+</html>

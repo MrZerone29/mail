@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mail Viewer - Email Detail</title>
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --border: #30363d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --accent: #58a6ff;
+      --accent-hover: #79c0ff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    .navbar {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      gap: 12px;
+    }
+
+    .navbar .back-btn {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .navbar .back-btn:hover {
+      background: var(--bg-tertiary);
+      color: var(--accent-hover);
+    }
+
+    .navbar h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 64px;
+      color: var(--text-secondary);
+    }
+
+    .loading .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--bg-tertiary);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .email-header {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .email-header .subject {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      line-height: 1.3;
+    }
+
+    .email-header .meta-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px 16px;
+      font-size: 14px;
+    }
+
+    .email-header .meta-label {
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .email-header .meta-value {
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+
+    .email-header .meta-value a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .email-header .meta-value a:hover {
+      text-decoration: underline;
+    }
+
+    .email-body {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      line-height: 1.7;
+      font-size: 15px;
+      overflow-x: auto;
+    }
+
+    .email-body h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+
+    .email-body .text-body {
+      white-space: pre-wrap;
+      font-family: inherit;
+      color: var(--text-primary);
+    }
+
+    .email-body .html-body {
+      max-width: 100%;
+    }
+
+    .email-body .html-body img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .email-body .no-body {
+      color: var(--text-secondary);
+      font-style: italic;
+      padding: 24px 0;
+      text-align: center;
+    }
+
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
+    .attachments {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-top: 16px;
+    }
+
+    .attachments h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .attachments .attachment-list {
+      list-style: none;
+    }
+
+    .attachments .attachment-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .attachments .attachment-item:last-child {
+      border-bottom: none;
+    }
+
+    .attachments .attachment-name {
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .attachments .attachment-meta {
+      color: var(--text-secondary);
+      font-size: 12px;
+      margin-left: auto;
+    }
+
+    .raw-toggle {
+      margin-top: 16px;
+    }
+
+    .raw-toggle button {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .raw-toggle button:hover {
+      background: var(--border);
+      color: var(--text-primary);
+    }
+
+    .raw-json {
+      display: none;
+      margin-top: 16px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-primary);
+    }
+
+    .raw-json.show {
+      display: block;
+    }
+
+    .error-state {
+      text-align: center;
+      padding: 64px 24px;
+      color: var(--danger, #f85149);
+    }
+
+    .error-state h2 {
+      margin-bottom: 8px;
+    }
+
+    .error-state .back-link {
+      display: inline-block;
+      margin-top: 16px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .error-state .back-link:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 12px; }
+      .email-header { padding: 16px; }
+      .email-header .subject { font-size: 20px; }
+      .email-body { padding: 16px; }
+      .email-header .meta-grid { grid-template-columns: 1fr; gap: 4px; }
+      .email-header .meta-label { margin-top: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/mail" class="back-btn">← Back to Inbox</a>
+    <h1 id="page-title">Email Detail</h1>
+  </nav>
+
+  <div class="container">
+    <div class="loading" id="loading-state">
+      <div class="spinner"></div>
+      <span>Loading email...</span>
+    </div>
+
+    <div id="email-content" style="display:none;">
+      <div class="email-header">
+        <div class="subject" id="email-subject"></div>
+        <div class="meta-grid">
+          <span class="meta-label">From:</span>
+          <span class="meta-value" id="email-from"></span>
+          <span class="meta-label">To:</span>
+          <span class="meta-value" id="email-to"></span>
+          <span class="meta-label">Date:</span>
+          <span class="meta-value" id="email-date"></span>
+        </div>
+      </div>
+
+      <div class="email-body">
+        <h3>Body</h3>
+        <div id="email-text-body" class="text-body"></div>
+        <hr class="section-divider" id="body-divider" style="display:none;">
+        <div id="email-html-body" class="html-body"></div>
+        <div class="no-body" id="no-body" style="display:none;">No content available</div>
+      </div>
+
+      <div class="attachments" id="attachments-section" style="display:none;">
+        <h3>📎 Attachments</h3>
+        <ul class="attachment-list" id="attachment-list"></ul>
+      </div>
+
+      <div class="raw-toggle">
+        <button onclick="toggleRaw()">📄 Show Raw JSON</button>
+      </div>
+      <pre class="raw-json" id="raw-json"></pre>
+    </div>
+
+    <div class="error-state" id="error-state" style="display:none;">
+      <h2>❌ Email Not Found</h2>
+      <p>The email you're looking for doesn't exist or was removed.</p>
+      <a href="/mail" class="back-link">← Back to Inbox</a>
+    </div>
+  </div>
+
+  <script>
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      return new Date(dateStr).toLocaleString([], {
+        year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    // Get email ID from URL path
+    const pathParts = window.location.pathname.split('/');
+    const emailId = pathParts[pathParts.length - 1];
+
+    fetch(`/mail/${emailId}`, { headers: { Accept: 'application/json' } })
+      .then(r => {
+        if (r.status === 404) throw new Error('NOT_FOUND');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(email => {
+        document.getElementById('loading-state').style.display = 'none';
+        document.getElementById('email-content').style.display = '';
+        document.getElementById('page-title').textContent = email.subject;
+
+        document.getElementById('email-subject').textContent = email.subject;
+        document.getElementById('email-from').textContent = email.from;
+        document.getElementById('email-to').textContent = email.to;
+        document.getElementById('email-date').textContent = formatDate(email.date);
+
+        const textBody = document.getElementById('email-text-body');
+        const htmlBody = document.getElementById('email-html-body');
+        const divider = document.getElementById('body-divider');
+        const noBody = document.getElementById('no-body');
+
+        let hasContent = false;
+
+        if (email.raw && email.raw.text) {
+          textBody.textContent = email.raw.text;
+          hasContent = true;
+        } else {
+          textBody.style.display = 'none';
+        }
+
+        if (email.raw && email.raw.html) {
+          htmlBody.innerHTML = email.raw.html;
+          hasContent = true;
+          // Show divider if both text and HTML exist
+          if (email.raw.text) {
+            divider.style.display = '';
+          }
+        } else {
+          htmlBody.style.display = 'none';
+          divider.style.display = 'none';
+        }
+
+        if (!hasContent) {
+          noBody.style.display = '';
+        }
+
+        // Attachments
+        if (email.raw && email.raw.attachments && email.raw.attachments.length > 0) {
+          const section = document.getElementById('attachments-section');
+          const list = document.getElementById('attachment-list');
+          section.style.display = '';
+          email.raw.attachments.forEach(att => {
+            const li = document.createElement('li');
+            li.className = 'attachment-item';
+            const size = att.size ? (att.size / 1024).toFixed(1) + ' KB' : 'Unknown';
+            li.innerHTML = `
+              <span class="attachment-name">📎 ${escapeHtml(att.filename || 'unnamed')}</span>
+              <span class="attachment-meta">${escapeHtml(att.contentType || 'unknown')} · ${size}</span>
+            `;
+            list.appendChild(li);
+          });
+        }
+
+        // Raw JSON
+        document.getElementById('raw-json').textContent = JSON.stringify(email, null, 2);
+      })
+      .catch(err => {
+        if (err.message === 'NOT_FOUND') {
+          document.getElementById('loading-state').style.display = 'none';
+          document.getElementById('error-state').style.display = '';
+        } else {
+          document.getElementById('loading-state').style.display = 'none';
+          document.getElementById('error-state').innerHTML = `
+            <h2>❌ Error Loading Email</h2>
+            <p>${escapeHtml(err.message)}</p>
+            <a href="/mail" class="back-link">← Back to Inbox</a>
+          `;
+          document.getElementById('error-state').style.display = '';
+        }
+      });
+
+    function toggleRaw() {
+      const el = document.getElementById('raw-json');
+      el.classList.toggle('show');
+    }
+  </script>
+</body>
+</html>

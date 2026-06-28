@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mail Viewer - Inbox</title>
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --border: #30363d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --accent: #58a6ff;
+      --accent-hover: #79c0ff;
+      --success: #3fb950;
+      --danger: #f85149;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    .navbar {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      gap: 24px;
+    }
+
+    .navbar h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+
+    .navbar .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+
+    .navbar .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .navbar .nav-links a:hover,
+    .navbar .nav-links a.active {
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+      transition: background 0.3s;
+    }
+
+    .badge .dot.connected {
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+    }
+
+    .badge .dot.disconnected {
+      background: var(--danger);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .toolbar h2 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .toolbar .count {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .table-wrapper {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    thead th:not(:last-child) {
+      border-right: 1px solid var(--border);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: var(--bg-tertiary);
+    }
+
+    tbody td {
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    tbody td.from {
+      color: var(--text-primary);
+      font-weight: 500;
+      white-space: nowrap;
+      max-width: 250px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    tbody td.subject {
+      color: var(--accent);
+      max-width: 400px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    tbody td.preview {
+      color: var(--text-secondary);
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    tbody td.date {
+      color: var(--text-secondary);
+      white-space: nowrap;
+      font-size: 13px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-secondary);
+    }
+
+    .loading .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--bg-tertiary);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 64px 24px;
+      color: var(--text-secondary);
+    }
+
+    .empty-state .icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .empty-state h3 {
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .error-state {
+      text-align: center;
+      padding: 64px 24px;
+      color: var(--danger);
+    }
+
+    .new-mail-flash {
+      animation: flash 2s ease-out;
+    }
+
+    @keyframes flash {
+      0% { background: rgba(88, 166, 255, 0.15); }
+      100% { background: transparent; }
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      max-width: 380px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      z-index: 1000;
+      transform: translateY(120%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .toast.show {
+      transform: translateY(0);
+    }
+
+    .toast .toast-title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+      color: var(--accent);
+    }
+
+    .toast .toast-subject {
+      font-size: 13px;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+
+    .toast .toast-from {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 12px; }
+      tbody td.preview { display: none; }
+      tbody td.date { font-size: 12px; }
+      .navbar { padding: 0 12px; gap: 12px; }
+      .navbar h1 { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <h1>📬 Mail Viewer</h1>
+    <div class="nav-links">
+      <a href="/mail" class="active">Inbox</a>
+      <a href="/mail/getid">IDs</a>
+      <a href="/search">Search</a>
+    </div>
+    <div class="badge" id="ws-badge">
+      <span class="dot disconnected" id="ws-dot"></span>
+      <span id="ws-status">Disconnected</span>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="toolbar">
+      <h2>Inbox</h2>
+      <span class="count" id="email-count">Loading...</span>
+    </div>
+
+    <div class="table-wrapper">
+      <div class="loading" id="loading-state">
+        <div class="spinner"></div>
+        <span>Loading emails...</span>
+      </div>
+
+      <table id="email-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>From</th>
+            <th>Subject</th>
+            <th>Preview</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="inbox-body"></tbody>
+      </table>
+
+      <div class="empty-state" id="empty-state" style="display:none;">
+        <div class="icon">📭</div>
+        <h3>No emails yet</h3>
+        <p>Your inbox is empty. New emails will appear here in real-time.</p>
+      </div>
+
+      <div class="error-state" id="error-state" style="display:none;">
+        <p>❌ Failed to load emails. Check your IMAP connection and try again.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">
+    <div class="toast-title">📨 New Email</div>
+    <div class="toast-subject" id="toast-subject"></div>
+    <div class="toast-from" id="toast-from"></div>
+  </div>
+
+  <script>
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diff = now - d;
+      const dayMs = 86400000;
+
+      if (diff < dayMs) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } else if (diff < 7 * dayMs) {
+        return d.toLocaleDateString([], { weekday: 'short' });
+      } else {
+        return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      }
+    }
+
+    let emails = [];
+
+    function renderEmails(data) {
+      emails = data;
+      const tbody = document.getElementById('inbox-body');
+      const table = document.getElementById('email-table');
+      const empty = document.getElementById('empty-state');
+      const error = document.getElementById('error-state');
+      const loading = document.getElementById('loading-state');
+      const countEl = document.getElementById('email-count');
+
+      loading.style.display = 'none';
+
+      if (!data || data.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = 'block';
+        countEl.textContent = '0 emails';
+        return;
+      }
+
+      table.style.display = '';
+      empty.style.display = 'none';
+      tbody.innerHTML = '';
+      countEl.textContent = `${data.length} email${data.length !== 1 ? 's' : ''}`;
+
+      data.forEach(email => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="from" title="${escapeHtml(email.from)}">${escapeHtml(email.from)}</td>
+          <td class="subject">${escapeHtml(email.subject)}</td>
+          <td class="preview">${escapeHtml(email.preview)}</td>
+          <td class="date">${formatDate(email.date)}</td>
+        `;
+        row.addEventListener('click', () => {
+          window.location.href = `/mail/${email.id}`;
+        });
+        tbody.appendChild(row);
+      });
+    }
+
+    function showError() {
+      document.getElementById('loading-state').style.display = 'none';
+      document.getElementById('error-state').style.display = 'block';
+      document.getElementById('email-count').textContent = 'Error';
+    }
+
+    // Load emails from current URL path (supports /mail and /mail/to/:email)
+    const dataUrl = window.location.pathname + window.location.search;
+    fetch(dataUrl, { headers: { Accept: 'application/json' } })
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(renderEmails)
+      .catch(showError);
+
+    // WebSocket for real-time updates
+    let ws = null;
+    let toastTimer = null;
+
+    function connectWs() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${window.location.host}`);
+
+      ws.onopen = () => {
+        document.getElementById('ws-dot').className = 'dot connected';
+        document.getElementById('ws-status').textContent = 'Connected';
+      };
+
+      ws.onclose = () => {
+        document.getElementById('ws-dot').className = 'dot disconnected';
+        document.getElementById('ws-status').textContent = 'Reconnecting...';
+        setTimeout(connectWs, 3000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'new_mail') {
+            const email = msg.data;
+            // Prepend to list
+            emails.unshift(email);
+            renderEmails(emails);
+
+            // Show toast
+            showToast(email);
+
+            // Flash the first row
+            const firstRow = document.querySelector('#inbox-body tr:first-child');
+            if (firstRow) {
+              firstRow.classList.remove('new-mail-flash');
+              void firstRow.offsetWidth; // reflow
+              firstRow.classList.add('new-mail-flash');
+            }
+          }
+        } catch (e) {
+          console.error('WS parse error:', e);
+        }
+      };
+    }
+
+    function showToast(email) {
+      document.getElementById('toast-subject').textContent = email.subject;
+      document.getElementById('toast-from').textContent = `From: ${email.from}`;
+      const toast = document.getElementById('toast');
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 5000);
+      toast.onclick = () => {
+        window.location.href = `/mail/${email.id}`;
+        toast.classList.remove('show');
+      };
+    }
+
+    connectWs();
+  </script>
+</body>
+</html>
