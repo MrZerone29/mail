@@ -30,7 +30,7 @@ A complete Mail Viewer system using Dovecot IMAP with REST API, Web UI, and real
 ```bash
 # Clone the repository
 git clone https://github.com/MrZerone29/mail.git
-cd mails
+cd mail
 
 # Install dependencies
 npm install
