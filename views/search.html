@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mail Viewer - Search</title>
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --border: #30363d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --accent: #58a6ff;
+      --accent-hover: #79c0ff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    .navbar {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      gap: 24px;
+    }
+
+    .navbar h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .navbar .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+
+    .navbar .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .navbar .nav-links a:hover,
+    .navbar .nav-links a.active {
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .search-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .search-box form {
+      display: flex;
+      gap: 12px;
+    }
+
+    .search-box input {
+      flex: 1;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 16px;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-box input:focus {
+      border-color: var(--accent);
+    }
+
+    .search-box input::placeholder {
+      color: var(--text-secondary);
+    }
+
+    .search-box button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+
+    .search-box button:hover {
+      background: var(--accent-hover);
+    }
+
+    .search-hint {
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-top: 12px;
+    }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .results-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .results-header .count {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .table-wrapper {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    thead th:not(:last-child) {
+      border-right: 1px solid var(--border);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: var(--bg-tertiary);
+    }
+
+    tbody td {
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    tbody td.from {
+      color: var(--text-primary);
+      font-weight: 500;
+      white-space: nowrap;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    tbody td.subject {
+      color: var(--accent);
+      max-width: 350px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    tbody td.preview {
+      color: var(--text-secondary);
+      max-width: 250px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    tbody td.date {
+      color: var(--text-secondary);
+      white-space: nowrap;
+      font-size: 13px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-secondary);
+    }
+
+    .loading .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--bg-tertiary);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 64px 24px;
+      color: var(--text-secondary);
+    }
+
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+    .highlight {
+      background: rgba(88, 166, 255, 0.2);
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 12px; }
+      .search-box form { flex-direction: column; }
+      .search-box button { width: 100%; }
+      tbody td.preview { display: none; }
+      .navbar { padding: 0 12px; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <h1>🔍 Mail Viewer</h1>
+    <div class="nav-links">
+      <a href="/mail">Inbox</a>
+      <a href="/mail/getid">IDs</a>
+      <a href="/search" class="active">Search</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="search-box">
+      <form id="search-form" onsubmit="return doSearch(event)">
+        <input type="text" id="search-input" placeholder="Search by subject, sender, or body content..." autofocus>
+        <button type="submit">Search</button>
+      </form>
+      <div class="search-hint">🔍 Searches across subject, sender (from), and email body</div>
+    </div>
+
+    <div id="results-area">
+      <div class="results-header" id="results-header" style="display:none;">
+        <h2>Results</h2>
+        <span class="count" id="result-count"></span>
+      </div>
+
+      <div class="table-wrapper" id="results-table-wrapper" style="display:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>From</th>
+              <th>Subject</th>
+              <th>Preview</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+
+      <div class="empty-state" id="initial-state">
+        <div class="icon">🔍</div>
+        <h3>Search your emails</h3>
+        <p>Type a query above to search through your inbox.</p>
+      </div>
+
+      <div class="empty-state" id="no-results" style="display:none;">
+        <div class="icon">📭</div>
+        <h3>No results found</h3>
+        <p>Try a different search query.</p>
+      </div>
+
+      <div class="loading" id="loading-state" style="display:none;">
+        <div class="spinner"></div>
+        <span>Searching...</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diff = now - d;
+      const dayMs = 86400000;
+      if (diff < dayMs) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      else if (diff < 7 * dayMs) return d.toLocaleDateString([], { weekday: 'short' });
+      else return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+
+    function highlightText(text, query) {
+      if (!text || !query) return escapeHtml(text || '');
+      const escaped = escapeHtml(text);
+      const escapedQuery = escapeHtml(query);
+      const regex = new RegExp(`(${escapedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return escaped.replace(regex, '<span class="highlight">$1</span>');
+    }
+
+    function doSearch(event) {
+      event.preventDefault();
+      const query = document.getElementById('search-input').value.trim();
+      if (!query) return false;
+
+      const loading = document.getElementById('loading-state');
+      const initial = document.getElementById('initial-state');
+      const noResults = document.getElementById('no-results');
+      const resultsHeader = document.getElementById('results-header');
+      const resultsTable = document.getElementById('results-table-wrapper');
+      const resultsBody = document.getElementById('results-body');
+
+      initial.style.display = 'none';
+      noResults.style.display = 'none';
+      resultsHeader.style.display = 'none';
+      resultsTable.style.display = 'none';
+      loading.style.display = '';
+
+      fetch(`/search?q=${encodeURIComponent(query)}`, {
+        headers: { Accept: 'application/json' }
+      })
+        .then(r => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(data => {
+          loading.style.display = 'none';
+
+          if (!data || data.length === 0) {
+            noResults.style.display = '';
+            return;
+          }
+
+          resultsHeader.style.display = '';
+          document.getElementById('result-count').textContent = `${data.length} result${data.length !== 1 ? 's' : ''}`;
+          resultsTable.style.display = '';
+          resultsBody.innerHTML = '';
+
+          data.forEach(email => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td class="from" title="${escapeHtml(email.from)}">${highlightText(email.from, query)}</td>
+              <td class="subject">${highlightText(email.subject, query)}</td>
+              <td class="preview">${highlightText(email.preview, query)}</td>
+              <td class="date">${formatDate(email.date)}</td>
+            `;
+            row.addEventListener('click', () => {
+              window.location.href = `/mail/${email.id}`;
+            });
+            resultsBody.appendChild(row);
+          });
+        })
+        .catch(err => {
+          loading.style.display = 'none';
+          noResults.style.display = '';
+          noResults.innerHTML = `
+            <div class="icon">❌</div>
+            <h3>Search failed</h3>
+            <p>${escapeHtml(err.message)}</p>
+          `;
+        });
+
+      return false;
+    }
+
+    // Check for query in URL on page load
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlQuery = urlParams.get('q');
+    if (urlQuery) {
+      document.getElementById('search-input').value = urlQuery;
+      doSearch(new Event('submit'));
+    }
+  </script>
+</body>
+</html>
