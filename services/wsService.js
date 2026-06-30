@@ -1,11 +1,27 @@
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
+const imapService = require('./imapService');
 
 let wss = null;
 let idleRunning = false;
 let lastKnownUid = 0;
+let sseClients = [];
+let refreshInterval = null;
+
+/**
+ * Parse refresh interval from .env or default to 30000ms.
+ * Set to 0 to disable fallback polling.
+ */
+function getRefreshInterval() {
+  const val = parseInt(process.env.MAIL_REFRESH_INTERVAL);
+  if (!isNaN(val) && val >= 0) {
+    return val;
+  }
+  return 30000; // default 30 seconds
+}
 
 function init(server) {
+  // WebSocket
   const { WebSocketServer } = require('ws');
   wss = new WebSocketServer({ server });
 
@@ -14,7 +30,42 @@ function init(server) {
     ws.on('close', () => console.log('[WS] Client disconnected'));
   });
 
+  // Start IMAP IDLE
   startIdle();
+
+  // Start fallback polling (if interval > 0)
+  const interval = getRefreshInterval();
+  if (interval > 0) {
+    refreshInterval = setInterval(async () => {
+      try {
+        const newCount = await imapService.fetchNewEmails();
+        if (newCount > 0) {
+          // Broadcast new email notifications
+          const latestEmails = imapService.emailCache.getEmails({ page: 1, limit: newCount });
+          for (const email of latestEmails.emails) {
+            const payload = {
+              type: 'new_mail',
+              data: {
+                id: email.id,
+                from: email.from,
+                to: email.to,
+                subject: email.subject,
+                date: email.date,
+                preview: email.preview,
+                _mailbox: imapService.emailCache.getEmailById(email.id)?._mailbox || null
+              }
+            };
+
+            broadcast(payload);
+            sendSSE(payload);
+          }
+        }
+      } catch (err) {
+        console.error('[POLL] Error:', err.message);
+      }
+    }, interval);
+    console.log(`[POLL] Fallback refresh every ${interval}ms`);
+  }
 }
 
 function broadcast(data) {
@@ -30,6 +81,62 @@ function broadcast(data) {
   if (count > 0) {
     console.log(`[WS] Broadcasted to ${count} client(s)`);
   }
+}
+
+/**
+ * Add an SSE client (response object).
+ */
+function addSSEClient(res) {
+  sseClients.push(res);
+  // Remove on close
+  res.on('close', () => {
+    sseClients = sseClients.filter(c => c !== res);
+  });
+}
+
+/**
+ * Send data to all SSE clients.
+ */
+function sendSSE(data) {
+  const message = `data: ${JSON.stringify(data)}\n\n`;
+  sseClients = sseClients.filter(res => {
+    try {
+      res.write(message);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  });
+}
+
+/**
+ * Express middleware for SSE endpoint.
+ */
+function sseHandler(req, res) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
+
+  // Send initial heartbeat
+  res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+
+  addSSEClient(res);
+
+  // Keep-alive heartbeat every 30s
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(`: heartbeat\n\n`);
+    } catch (e) {
+      clearInterval(heartbeat);
+    }
+  }, 30000);
+
+  res.on('close', () => {
+    clearInterval(heartbeat);
+  });
 }
 
 async function getNewestUid(client) {
@@ -67,7 +174,7 @@ async function startIdle() {
         console.log(`[IDLE] Watching for new mail (last UID: ${lastKnownUid})...`);
 
         // Listen for EXISTS events (new mail)
-        client.on('exists', async (event) => {
+        client.on('exists', async () => {
           try {
             const currentNewest = await getNewestUid(client);
             if (currentNewest > lastKnownUid) {
@@ -82,21 +189,32 @@ async function startIdle() {
               })) {
                 try {
                   const parsed = await simpleParser(msg.source);
+                  const emailData = {
+                    id: msg.uid,
+                    from: parsed.from ? parsed.from.text : (msg.envelope?.from?.[0]?.address || ''),
+                    to: parsed.to ? parsed.to.text : (msg.envelope?.to?.map(t => t.address).join(', ') || ''),
+                    subject: parsed.subject || '(no subject)',
+                    date: parsed.date || msg.envelope?.date || new Date().toISOString(),
+                    preview: parsed.text
+                      ? parsed.text.replace(/\s+/g, ' ').trim().substring(0, 200)
+                      : '',
+                    flags: msg.flags || []
+                  };
+
+                  // Update cache
+                  imapService.emailCache.addNewEmail(emailData);
+
+                  const cachedEmail = imapService.emailCache.getEmailById(emailData.id);
                   const payload = {
                     type: 'new_mail',
                     data: {
-                      id: msg.uid,
-                      from: parsed.from ? parsed.from.text : (msg.envelope?.from?.[0]?.address || ''),
-                      to: parsed.to ? parsed.to.text : (msg.envelope?.to?.map(t => t.address).join(', ') || ''),
-                      subject: parsed.subject || '(no subject)',
-                      date: parsed.date || msg.envelope?.date || new Date().toISOString(),
-                      preview: parsed.text
-                        ? parsed.text.replace(/\s+/g, ' ').trim().substring(0, 200)
-                        : ''
+                      ...emailData,
+                      _mailbox: cachedEmail?._mailbox || null
                     }
                   };
 
                   broadcast(payload);
+                  sendSSE(payload);
 
                   // Webhook
                   const webhookUrl = process.env.WEBHOOK_URL;
@@ -169,6 +287,10 @@ function sendWebhook(url, data) {
 
 function stop() {
   idleRunning = false;
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
 }
 
-module.exports = { init, broadcast, stop };
+module.exports = { init, broadcast, stop, sseHandler };

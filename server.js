@@ -5,6 +5,7 @@ const http = require('http');
 const path = require('path');
 const mailRoutes = require('./routes/mailRoutes');
 const wsService = require('./services/wsService');
+const imapService = require('./services/imapService');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,7 +14,7 @@ const PORT = parseInt(process.env.PORT || '3000');
 
 // --- Middleware ---
 
-// Parse JSON bodies (for potential future use)
+// Parse JSON bodies
 app.use(express.json());
 
 // Logging middleware
@@ -29,11 +30,11 @@ app.use((req, res, next) => {
 
 // --- Routes ---
 
+// SSE endpoint (before mail routes to avoid conflicts)
+app.get('/api/events', wsService.sseHandler);
+
 // Mount mail routes
 app.use('/', mailRoutes);
-
-// GET /mail/to/:email routes need to be defined before /mail/:id to avoid conflicts
-// But our router is already handling this correctly since /mail/to/:email is a specific path
 
 // Root redirect
 app.get('/', (req, res) => {
@@ -42,7 +43,12 @@ app.get('/', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    cache: imapService.emailCache.initialized ? 'initialized' : 'pending',
+    cacheSize: imapService.emailCache.emails.length
+  });
 });
 
 // 404 handler
@@ -56,20 +62,37 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// --- Start Server ---
+// --- Initialize Cache on Startup ---
 
-server.listen(PORT, () => {
+async function startup() {
   console.log('╔══════════════════════════════════════════════╗');
   console.log('║         📬 Mail Viewer                       ║');
   console.log('╠══════════════════════════════════════════════╣');
   console.log(`║  Server:    http://localhost:${PORT}             ║`);
   console.log(`║  Web UI:    http://localhost:${PORT}/mail       ║`);
-  console.log(`║  API:       http://localhost:${PORT}/mail (JSON) ║`);
+  console.log(`║  API:       http://localhost:${PORT}/api/emails  ║`);
   console.log(`║  WebSocket: ws://localhost:${PORT}              ║`);
+  console.log(`║  SSE:       http://localhost:${PORT}/api/events  ║`);
   console.log('╚══════════════════════════════════════════════╝');
 
   // Initialize WebSocket with IMAP IDLE
   wsService.init(server);
+
+  // Initialize email cache in background
+  try {
+    console.log('[STARTUP] Loading email cache...');
+    const count = await imapService.initializeCache();
+    console.log(`[STARTUP] Cache loaded: ${count} emails in ${imapService.emailCache.mailboxes.size} mailbox(es)`);
+  } catch (err) {
+    console.error('[STARTUP] Cache initialization failed:', err.message);
+    console.log('[STARTUP] Will retry on first request...');
+  }
+}
+
+// --- Start Server ---
+
+server.listen(PORT, async () => {
+  await startup();
 });
 
 // Graceful shutdown
