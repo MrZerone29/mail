@@ -29,7 +29,7 @@ A complete Mail Viewer system using Dovecot IMAP with REST API, Web UI, and real
 
 ```bash
 # Clone the repository
-git clone [<repo-url>](https://github.com/MrZerone29/mail.git)
+git clone https://github.com/MrZerone29/mail.git
 cd mail-viewer
 
 # Install dependencies
